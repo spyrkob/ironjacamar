@@ -23,6 +23,7 @@
 package org.jboss.jca.adapters.jdbc.local;
 
 import org.jboss.jca.adapters.jdbc.BaseWrapperManagedConnectionFactory;
+import org.jboss.jca.adapters.jdbc.TcclInvocationHandler;
 import org.jboss.jca.adapters.jdbc.classloading.TCClassLoaderPlugin;
 import org.jboss.jca.adapters.jdbc.spi.URLSelectorStrategy;
 import org.jboss.jca.adapters.jdbc.util.Injection;
@@ -30,7 +31,9 @@ import org.jboss.jca.adapters.jdbc.util.Injection;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.sql.Connection;
@@ -593,7 +596,6 @@ public class LocalManagedConnectionFactory extends BaseWrapperManagedConnectionF
       {
          // Load class to trigger static initialization of the driver
          Class<?> clazz = Class.forName(driverClass, true, getClassLoaderPlugin().getClassLoader());
-
          driver = (Driver)clazz.newInstance();
 
          log.debugf("Driver loaded and instance created:%s", driver);
@@ -659,7 +661,12 @@ public class LocalManagedConnectionFactory extends BaseWrapperManagedConnectionF
          }
       }
 
-      return dataSource;
+      return getDsProxy(dataSource);
+   }
+
+   private synchronized DataSource getDsProxy(final DataSource dataSource) {
+      InvocationHandler handler = new TcclInvocationHandler(dataSource, getClassLoaderPlugin());
+      return (DataSource) Proxy.newProxyInstance(SecurityActions.getThreadContextClassLoader(), new Class[] {DataSource.class}, handler);
    }
 
    /**

@@ -49,4 +49,16 @@ class SecurityActions
          }
       });
    }
+   
+   public static void setThreadContextClassLoader(final ClassLoader cl)
+   {
+      AccessController.doPrivileged(new PrivilegedAction<Object>() 
+      {
+         public Object run()
+         {
+            Thread.currentThread().setContextClassLoader(cl);
+            return null;
+         }
+      });
+   }
 }

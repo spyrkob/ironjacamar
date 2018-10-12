@@ -23,6 +23,7 @@
 package org.jboss.jca.adapters.jdbc.xa;
 
 import org.jboss.jca.adapters.jdbc.BaseWrapperManagedConnectionFactory;
+import org.jboss.jca.adapters.jdbc.TcclInvocationHandler;
 import org.jboss.jca.adapters.jdbc.classloading.TCClassLoaderPlugin;
 import org.jboss.jca.adapters.jdbc.spi.URLXASelectorStrategy;
 import org.jboss.jca.adapters.jdbc.spi.XAData;
@@ -31,7 +32,9 @@ import org.jboss.jca.adapters.jdbc.util.Injection;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.sql.SQLException;
@@ -512,8 +515,8 @@ public class XAManagedConnectionFactory extends BaseWrapperManagedConnectionFact
          final String password = props.getProperty("password");
 
          xaConnection = (user != null)
-            ? getXADataSource().getXAConnection(user, password)
-            : getXADataSource().getXAConnection();
+           ? getXADataSource().getXAConnection(user, password)
+           : getXADataSource().getXAConnection();
 
          return newXAManagedConnection(props, xaConnection);
       }
@@ -642,8 +645,10 @@ public class XAManagedConnectionFactory extends BaseWrapperManagedConnectionFact
          if (xaDataSourceClass == null)
             throw new ResourceException(bundle.xaDatasourceClassNull());
 
+         ClassLoader tccl = SecurityActions.getThreadContextClassLoader();
          try
          {
+            SecurityActions.setThreadContextClassLoader(getClassLoaderPlugin().getClassLoader());
             Class<?> clazz = Class.forName(xaDataSourceClass, true, getClassLoaderPlugin().getClassLoader());
 
             xads = (XADataSource) clazz.newInstance();
@@ -660,9 +665,16 @@ public class XAManagedConnectionFactory extends BaseWrapperManagedConnectionFact
          catch (Throwable t)
          {
             throw new ResourceException(bundle.failedToLoadXADataSource(getXADataSourceClass()), t);
+         } finally {
+            SecurityActions.setThreadContextClassLoader(tccl);
          }
       }
-      return xads;
+      return getDsProxy(xads);
+   }
+
+   private synchronized XADataSource getDsProxy(final XADataSource dataSource) {
+      InvocationHandler handler = new TcclInvocationHandler(dataSource, getClassLoaderPlugin());
+      return (XADataSource) Proxy.newProxyInstance(SecurityActions.getThreadContextClassLoader(), new Class[] {XADataSource.class}, handler);
    }
 
    /**
