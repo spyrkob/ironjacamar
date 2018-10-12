@@ -311,14 +311,26 @@ public class LocalManagedConnectionFactory extends BaseWrapperManagedConnectionF
          if (dataSourceClass != null && !copy.isEmpty())
          {
             DataSource d = getDataSource();
-            con = d.getConnection(copy.getProperty("user"), copy.getProperty("password"));
+            ClassLoader cl = SecurityActions.getThreadContextClassLoader();
+            try {
+            	   SecurityActions.setThreadContextClassLoader(getClassLoaderPlugin().getClassLoader());
+            	   con = d.getConnection(copy.getProperty("user"), copy.getProperty("password"));
+            } finally {
+         	   SecurityActions.setThreadContextClassLoader(cl);
+            }
             if (con == null)
                throw new ResourceException(bundle.unableToCreateConnectionFromDataSource());
          }
          else if (driverClass != null)
          {
             Driver d = getDriver(url);
-            con = d.connect(url, copy);
+            ClassLoader cl = SecurityActions.getThreadContextClassLoader();
+            try {
+            	   SecurityActions.setThreadContextClassLoader(getClassLoaderPlugin().getClassLoader());
+               con = d.connect(url, copy);
+            } finally {
+            	   SecurityActions.setThreadContextClassLoader(cl);
+            }
             if (con == null)
                throw new ResourceException(bundle.wrongDriverClass(d.getClass().getName(), url));
          }
@@ -593,8 +605,13 @@ public class LocalManagedConnectionFactory extends BaseWrapperManagedConnectionF
       {
          // Load class to trigger static initialization of the driver
          Class<?> clazz = Class.forName(driverClass, true, getClassLoaderPlugin().getClassLoader());
-
-         driver = (Driver)clazz.newInstance();
+         ClassLoader tccl = SecurityActions.getThreadContextClassLoader();
+    		 try {
+    			 SecurityActions.setThreadContextClassLoader(getClassLoaderPlugin().getClassLoader());
+    			 driver = (Driver)clazz.newInstance();
+    		 } finally {
+    			 SecurityActions.setThreadContextClassLoader(tccl);
+    		 }
 
          log.debugf("Driver loaded and instance created:%s", driver);
 

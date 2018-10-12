@@ -511,9 +511,15 @@ public class XAManagedConnectionFactory extends BaseWrapperManagedConnectionFact
          final String user = props.getProperty("user");
          final String password = props.getProperty("password");
 
-         xaConnection = (user != null)
-            ? getXADataSource().getXAConnection(user, password)
-            : getXADataSource().getXAConnection();
+         ClassLoader cl = SecurityActions.getThreadContextClassLoader();
+         try {
+         	SecurityActions.setThreadContextClassLoader(getClassLoaderPlugin().getClassLoader());
+            xaConnection = (user != null)
+               ? getXADataSource().getXAConnection(user, password)
+               : getXADataSource().getXAConnection();
+         } finally {
+             SecurityActions.setThreadContextClassLoader(cl);
+          }
 
          return newXAManagedConnection(props, xaConnection);
       }
